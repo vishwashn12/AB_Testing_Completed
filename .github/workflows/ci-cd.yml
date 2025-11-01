@@ -32,7 +32,7 @@ jobs:
       - name: Build backend
         run: |
           echo "Building backend..."
-          npm run build:backend --if-present
+          npm run build:backend
 
       - name: Build frontend
         run: |
