@@ -22,30 +22,22 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Install backend dependencies
+      - name: Install root dependencies
         run: |
-          echo "Installing backend dependencies..."
-          cd backend
-          npm install
-
-      - name: Install frontend dependencies
-        run: |
-          echo "Installing frontend dependencies..."
-          cd frontend
-          npm install
+          echo "Installing root dependencies..."
+          npm ci
 
       - name: Build backend
         run: |
           echo "Building backend..."
-          cd backend
-          npm run build --if-present
+          npm run build:backend --if-present
 
       - name: Build frontend
         run: |
           echo "Building frontend..."
-          cd frontend
-          npm run build
+          npm run build:frontend
 
   # ======================================
   # TEST STAGE
@@ -68,28 +60,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Install backend dependencies
-        run: |
-          cd backend
-          npm install
-
-      - name: Install frontend dependencies
-        run: |
-          cd frontend
-          npm install
+      - name: Install dependencies
+        run: npm ci
 
       - name: Run Backend Tests
         run: |
           echo "Running backend tests..."
-          cd backend
-          npm test
+          npm run test:backend
 
       - name: Run Frontend Tests
         run: |
           echo "Running frontend tests..."
-          cd frontend
-          npm test --if-present
+          npm run test:frontend
 
   # ======================================
   # COVERAGE STAGE
@@ -110,17 +94,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Install backend dependencies
-        run: |
-          cd backend
-          npm install
+      - name: Install dependencies
+        run: npm ci
 
       - name: Generate backend coverage report
         run: |
           echo "Generating coverage for backend..."
-          cd backend
-          npm run test:coverage --if-present || npm test --if-present || echo "No test coverage script"
+          cd apps/backend
+          npm run coverage || npx jest --coverage || echo "Coverage completed"
 
   # ======================================
   # LINT STAGE
@@ -138,25 +121,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
+        run: npm ci
+
+      - name: Run Linting
         run: |
-          cd backend
-          npm install
+          echo "Running linting for all apps..."
+          npm run lint
+
+      - name: Save lint reports
+        if: always()
+        run: |
+          mkdir -p lint-report
+          cd apps/backend
+          npx eslint . --ext .js,.jsx,.ts,.tsx -f html -o ../../lint-report/backend-lint.html 2>/dev/null || echo "Backend lint report done"
           cd ../frontend
-          npm install
-
-      - name: Run Backend Linting
-        run: |
-          echo "Running linting for backend..."
-          cd backend
-          npm run lint --if-present || echo "No lint script found"
-
-      - name: Run Frontend Linting
-        run: |
-          echo "Running linting for frontend..."
-          cd frontend
-          npm run lint --if-present || echo "No lint script found"
+          npx eslint . --ext .js,.jsx,.ts,.tsx -f html -o ../../lint-report/frontend-lint.html 2>/dev/null || echo "Frontend lint report done"
 
   # ======================================
   # SECURITY SCAN STAGE
@@ -174,28 +156,20 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Install backend dependencies
-        run: |
-          cd backend
-          npm install
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Install frontend dependencies
+      - name: Run npm audit
         run: |
-          cd frontend
-          npm install
+          echo "Running npm audit..."
+          npm audit --audit-level moderate
 
-      - name: Run backend npm audit
+      - name: Run security audit with report
+        if: always()
         run: |
-          echo "Running npm audit on backend..."
-          cd backend
-          npm audit --audit-level moderate || echo "Backend audit completed"
-
-      - name: Run frontend npm audit
-        run: |
-          echo "Running npm audit on frontend..."
-          cd frontend
-          npm audit --audit-level moderate || echo "Frontend audit completed"
+          npm audit --json > security-report.json || echo "Security audit completed with issues"
 
   # ======================================
   # DEPLOYMENT ARTIFACT STAGE
@@ -217,43 +191,176 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: Install backend dependencies
-        run: |
-          cd backend
-          npm install
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Install frontend dependencies
+      - name: Generate all reports
         run: |
-          cd frontend
-          npm install
-
-      - name: Build backend
-        run: |
-          cd backend
-          npm run build --if-present || echo "No build script"
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm run build
-
-      - name: Generate reports
-        run: |
+          # Create reports directory
           mkdir -p reports
-          echo "Backend and Frontend built successfully" > reports/build-status.txt
+          
+          # ============================================
+          # BACKEND REPORTS
+          # ============================================
+          echo "Generating backend reports..."
+          cd apps/backend
+          
+          # Backend tests
+          npm test || echo "Backend tests completed"
+          cp -r test-results ../../reports/backend-test-results 2>/dev/null || echo "No backend test results"
+          cp junit.xml ../../reports/ 2>/dev/null || echo "No junit.xml"
+          
+          # Backend coverage
+          npm run coverage || npx jest --coverage || echo "Coverage completed"
+          cp -r coverage ../../reports/backend-coverage 2>/dev/null || echo "No coverage directory"
+          cp lcov.info ../../reports/backend-lcov.info 2>/dev/null || echo "No lcov.info"
+          
+          cd ../..
+          
+          # ============================================
+          # FRONTEND REPORTS
+          # ============================================
+          echo "Generating frontend reports..."
+          cd apps/frontend
+          
+          # Frontend tests & coverage
+          npm run coverage || echo "Frontend coverage completed"
+          cp -r test-results ../../reports/frontend-test-results 2>/dev/null || echo "No frontend test results"
+          cp -r coverage ../../reports/frontend-coverage 2>/dev/null || echo "No frontend coverage directory"
+          
+          cd ../..
+          
+          # ============================================
+          # LINT REPORTS
+          # ============================================
+          echo "Generating lint reports..."
+          mkdir -p reports/lint-report
+          
+          cd apps/backend
+          npx eslint . --ext .js -f html -o ../../reports/lint-report/backend-eslint.html 2>/dev/null || echo "Backend lint report generated"
+          
+          cd ../frontend
+          npx eslint . --ext .js,.jsx -f html -o ../../reports/lint-report/frontend-eslint.html 2>/dev/null || echo "Frontend lint report generated"
+          
+          cd ../..
+          
+          # ============================================
+          # SECURITY REPORT
+          # ============================================
+          echo "Generating security report..."
+          npm audit --json > reports/security-report.json || echo "Security audit completed"
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-artifacts
-          path: |
-            backend/dist
-            frontend/dist
-            reports
-
-      - name: Deployment summary
+      - name: Create source code artifact
         run: |
-          echo "✅ Build and deployment artifacts created successfully"
-          echo "📦 Backend built"
-          echo "📦 Frontend built"
+          echo "Creating source code package..."
+          
+          # Copy entire repository including workflows
+          rsync -av --progress \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            --exclude 'reports' \
+            --exclude '*.zip' \
+            ./ source-code/
+          
+          # Create zip
+          zip -r source-code-${{ github.run_id }}.zip source-code
+          
+          echo "✓ Source code package created!"
+          ls -lh source-code-${{ github.run_id }}.zip
+
+      - name: Create reports artifact
+        run: |
+          echo "Organizing CI/CD reports..."
+          mkdir -p ci-reports/backend ci-reports/frontend
+          
+          # ============================================
+          # BACKEND REPORTS
+          # ============================================
+          echo "Organizing backend reports..."
+          
+          # Test results
+          if [ -d "reports/backend-test-results" ]; then
+            cp -r reports/backend-test-results ci-reports/backend/test-results
+          fi
+          
+          # Coverage
+          if [ -d "reports/backend-coverage" ]; then
+            cp -r reports/backend-coverage ci-reports/backend/coverage
+          fi
+          if [ -f "reports/backend-lcov.info" ]; then
+            cp reports/backend-lcov.info ci-reports/backend/lcov.info
+          fi
+          
+          # Lint
+          if [ -f "reports/lint-report/backend-eslint.html" ]; then
+            mkdir -p ci-reports/backend/lint
+            cp reports/lint-report/backend-eslint.html ci-reports/backend/lint/report.html
+          fi
+          
+          # ============================================
+          # FRONTEND REPORTS
+          # ============================================
+          echo "Organizing frontend reports..."
+          
+          # Test results
+          if [ -d "reports/frontend-test-results" ]; then
+            cp -r reports/frontend-test-results ci-reports/frontend/test-results
+          fi
+          
+          # Coverage
+          if [ -d "reports/frontend-coverage" ]; then
+            cp -r reports/frontend-coverage ci-reports/frontend/coverage
+          fi
+          
+          # Lint
+          if [ -f "reports/lint-report/frontend-eslint.html" ]; then
+            mkdir -p ci-reports/frontend/lint
+            cp reports/lint-report/frontend-eslint.html ci-reports/frontend/lint/report.html
+          fi
+          
+          # ============================================
+          # SECURITY REPORT
+          # ============================================
+          if [ -f "reports/security-report.json" ]; then
+            cp reports/security-report.json ci-reports/security-report.json
+          fi
+          
+          # Create summary
+          cat > ci-reports/README.md << 'EOF'
+          # CI/CD Reports
+          
+          ## Backend Reports
+          - **Test Results**: `backend/test-results/junit.xml`
+          - **Code Coverage**: `backend/coverage/lcov-report/index.html`
+          - **Lint Report**: `backend/lint/report.html`
+          
+          ## Frontend Reports
+          - **Test Results**: `frontend/test-results/junit.xml`
+          - **Code Coverage**: `frontend/coverage/index.html`
+          - **Lint Report**: `frontend/lint/report.html`
+          
+          ## Security
+          - **Audit Report**: `security-report.json`
+          EOF
+          
+          # Create zip
+          zip -r ci-reports-${{ github.run_id }}.zip ci-reports
+          
+          echo "✓ Reports package created!"
+          ls -lh ci-reports-${{ github.run_id }}.zip
+
+      - name: Upload source code artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-code
+          path: source-code-*.zip
+          retention-days: 90
+
+      - name: Upload reports artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-reports
+          path: ci-reports-*.zip
+          retention-days: 90

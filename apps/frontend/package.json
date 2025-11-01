@@ -1,5 +1,5 @@
 {
-  "name": "ab-testing-frontend",
+  "name": "@ab-testing/frontend",
   "version": "1.0.0",
   "description": "A/B Testing Platform Frontend - React + Vite + Tailwind",
   "type": "module",

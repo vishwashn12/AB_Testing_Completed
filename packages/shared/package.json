@@ -1,0 +1,16 @@
+{
+  "name": "@ab-testing/shared",
+  "version": "1.0.0",
+  "description": "Shared utilities and code for A/B Testing Platform",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "shared",
+    "utilities"
+  ],
+  "author": "A/B Testing Team",
+  "license": "ISC"
+}

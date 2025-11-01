@@ -9,7 +9,7 @@ const ENABLE_HTTPS = process.env.ENABLE_HTTPS === 'true';
 // Start Server
 const startServer = () => {
   if (ENABLE_HTTPS && process.env.SSL_CERT_PATH && process.env.SSL_KEY_PATH) {
-    // HTTPS Server (US-20)
+    // HTTPS Server
     try {
       const httpsOptions = {
         key: fs.readFileSync(process.env.SSL_KEY_PATH),
@@ -34,23 +34,31 @@ const startHTTPServer = () => {
   app.listen(PORT, () => {
     console.log(`🚀 HTTP Server running on port ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
-    console.log(`📊 MongoDB: ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}`);
   });
 };
 
+// Graceful Shutdown
+const gracefulShutdown = (signal) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+  
+  // Close server and database connections
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // Handle Uncaught Exceptions
-process.on('uncaughtException', (err) => {
-  console.error('❌ UNCAUGHT EXCEPTION! Shutting down...');
-  console.error(err.name, err.message);
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught Exception:', error);
   process.exit(1);
 });
 
-// Start
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
 startServer();
 
-// Handle Unhandled Promise Rejections
-process.on('unhandledRejection', (err) => {
-  console.error('❌ UNHANDLED REJECTION! Shutting down...');
-  console.error(err.name, err.message);
-  process.exit(1);
-});
+module.exports = app;
